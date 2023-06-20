@@ -1,46 +1,65 @@
+import http from 'http';
+import { Distributor } from './file-distributor.js';
 import path from 'path';
 import fs from 'fs';
-import process from 'process';
-import { Helper } from './helper.js';
 
-import { Worker } from 'worker_threads';
-const distributeTasks = () => {
-  return new Promise((resolve, reject) => {
-    if (process.argv.length != 3) {
-      reject("Invalid number of arguments!");
-      process.exit();
+http.createServer((req, res) => { handleServerRequests(req, res) }).listen(8090);
+
+function handleServerRequests(req, res) {
+  if (req.method === 'POST') {
+    if (req.url === '/exports') {
+      handlePostRequest(req, res);
     }
-    let csvFilesList = new Helper(process.argv[2].toString()).getCsvFilePaths();
-    let threadsArray = [];
-    for (let i = 0; i < 2; i++) {
-      let worker = new Worker('./worker.js');
-      threadsArray.push(worker);
-      worker.on('online', () => {
-        worker.postMessage({ taskIndex: i, filePath: csvFilesList[i] });
-      });
+    else {
+      handleBadRequests(res);
     }
-    let numOfAllrecords = 0;
-    let currentTaskIndex = 0;
-    let terminatedCount = 0;
-    threadsArray.forEach((worker) => {
-      worker.on('message', (message) => {
-        currentTaskIndex++;
-        numOfAllrecords += message.numOfRecords;
-        if (currentTaskIndex < csvFilesList.length) {
-          worker.postMessage({ taskIndex: currentTaskIndex, filePath: csvFilesList[currentTaskIndex] });
-        } else {
-          terminatedCount++;
-          worker.terminate();
-        }
+  }
+  if (req.method === 'DELETE') {
+    if (req.url.startsWith('/files/')) {
+      handleDeleteRequest(req, res);
+    }
+    else {
+      handleBadRequests(res);
+    }
+  }
+}
+
+function handlePostRequest(req, res) {
+  let directoryName;
+  req.on('data', (chunk) => {
+    directoryName = JSON.parse(chunk).csvPath;
+  });
+
+  req.on('end', () => {
+    new Distributor().distributeTasks(directoryName).then(
+      (result) => {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/plain');
+        res.end('Data is converted and saved successfully!');
+      }).catch((err) => {
+        res.statusCode = 403;
+        res.end('Bad Request!');
       });
-      worker.on('error', (error) => reject(`Error while workingwith threads: ${error}`));
-      worker.on('exit', (code) => {
-        if (terminatedCount === csvFilesList.length)
-          resolve(numOfAllrecords);
-        process.exit();
-      });
-    });
+
   });
 }
-distributeTasks().then(
-  result => console.log(result)).catch(err => console.error(err));
+
+function handleDeleteRequest(req, res) {
+  const fileName = req.url.split('/').pop();
+  const filePath = path.resolve(process.cwd(), 'Converted', fileName);
+  fs.unlink(filePath, (err) => {
+    if (err) {
+      res.statusCode = 404;
+      res.end('File not found.');
+    }
+    else {
+      res.statusCode = 200;
+      res.end('Successfully deleted!');
+    }
+  });
+}
+
+function handleBadRequests(res) {
+  res.statusCode = 403;
+  res.end('Bad Request!');
+}
