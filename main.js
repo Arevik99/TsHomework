@@ -22,6 +22,14 @@ function handleServerRequests(req, res) {
       handleBadRequests(res);
     }
   }
+  if (req.method === 'GET') {
+    if (req.url.startsWith('/files/')) {
+      handleGetByFileName(req, res);
+    }
+    else {
+      handleBadRequests(res);
+    }
+  }
 }
 
 function handlePostRequest(req, res) {
@@ -55,6 +63,22 @@ function handleDeleteRequest(req, res) {
     else {
       res.statusCode = 200;
       res.end('Successfully deleted!');
+    }
+  });
+}
+
+function handleGetByFileName(req, res) {
+  const fileName = req.url.split('/').pop();
+  const filePath = path.resolve(process.cwd(), 'Converted', fileName);
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.statusCode = 404;
+      res.end('File not found.');
+      return;
+    }
+    else {
+      res.statusCode = 200;
+      res.end(data.toString());
     }
   });
 }
