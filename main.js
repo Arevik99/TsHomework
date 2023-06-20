@@ -23,11 +23,16 @@ function handleServerRequests(req, res) {
     }
   }
   if (req.method === 'GET') {
-    if (req.url.startsWith('/files/')) {
-      handleGetByFileName(req, res);
+    if (req.url === '/files') {
+      handleGetRequest(req, res);
     }
     else {
-      handleBadRequests(res);
+      if (req.url.startsWith('/files/')) {
+        handleGetByFileName(req, res);
+      }
+      else {
+        handleBadRequests(res);
+      }
     }
   }
 }
@@ -81,6 +86,18 @@ function handleGetByFileName(req, res) {
       res.end(data.toString());
     }
   });
+}
+
+function handleGetRequest(req, res) {
+  let directoryPath = path.resolve(process.cwd(), 'Converted');
+  let dirContent = [];
+  fs.readdirSync(directoryPath, (err) => {
+    if (err) {
+      res.statusCode = 404;
+      res.end('File not found.');
+    }
+  }).filter((fileName) => { dirContent.push(fileName); });
+  res.end(dirContent.toString());
 }
 
 function handleBadRequests(res) {
